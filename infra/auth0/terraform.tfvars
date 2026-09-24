@@ -8,12 +8,14 @@ api_permissions = {
   "write:photos" = "Create and update photo records"
   "read:people"  = "Read people (photo subjects and camera owners)"
   "write:people" = "Create, update and delete people"
+  "read:places"  = "Read places"
+  "write:places" = "Create, update and delete places"
 }
 
 # What each Auth0 role may do in np-api. Users get these in their token's "permissions" claim.
 role_permissions = {
-  admin  = ["read:photos", "write:photos", "read:people", "write:people"]
-  member = ["read:photos", "read:people"]
+  admin  = ["read:photos", "write:photos", "read:people", "write:people", "read:places", "write:places"]
+  member = ["read:photos", "read:people", "read:places"]
 }
 
 spas = {
@@ -43,7 +45,7 @@ spas = {
       "https://np-yellowstone.netlify.app", # yellowstone (Netlify)
       "https://yellowstone.natepaxton.com", # yellowstone
     ]
-    scopes = ["read:photos", "write:photos", "read:people", "write:people"]
+    scopes = ["read:photos", "write:photos", "read:people", "write:people", "read:places", "write:places"]
   }
 
   # Public PKCE client (no secret) for developer tools: Postman (leave Client Secret empty) and
@@ -53,6 +55,6 @@ spas = {
     callback_urls = ["https://oauth.pstmn.io/v1/callback", "http://localhost:8765/callback"]
     logout_urls   = []
     web_origins   = []
-    scopes        = ["read:photos", "write:photos", "read:people", "write:people"]
+    scopes        = ["read:photos", "write:photos", "read:people", "write:people", "read:places", "write:places"]
   }
 }

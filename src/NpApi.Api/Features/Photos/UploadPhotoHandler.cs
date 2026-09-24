@@ -2,6 +2,7 @@ using Microsoft.Extensions.Options;
 using NpApi.Api.Data;
 using NpApi.Api.Features.People;
 using NpApi.Api.Features.Photos.Storage;
+using NpApi.Api.Features.Places;
 
 namespace NpApi.Api.Features.Photos;
 
@@ -12,6 +13,7 @@ public sealed record UploadPhotoCommand(
     string FileName,
     string UploadedBy,
     Guid? CameraOwnerId = null,
+    Guid? PlaceId = null,
     string? DateCategory = null,
     double? Lat = null,
     double? Lng = null,
@@ -49,18 +51,27 @@ public sealed class UploadPhotoHandler(
             return new UploadPhotoResult.Invalid(errors);
         }
 
-        // Checked before uploading, so an unknown person never leaves an orphaned image behind.
-        Person? cameraOwner = null;
-        if (command.CameraOwnerId is { } cameraOwnerId)
+        // Referenced rows are checked before uploading, so an unknown id never leaves an orphaned
+        // image behind.
+        var cameraOwner = command.CameraOwnerId is { } cameraOwnerId
+            ? await db.People.FindAsync([cameraOwnerId], cancellationToken)
+            : null;
+        var place = command.PlaceId is { } placeId
+            ? await db.Places.FindAsync([placeId], cancellationToken)
+            : null;
+
+        var missing = new Dictionary<string, string[]>();
+        if (command.CameraOwnerId is not null && cameraOwner is null)
         {
-            cameraOwner = await db.People.FindAsync([cameraOwnerId], cancellationToken);
-            if (cameraOwner is null)
-            {
-                return new UploadPhotoResult.Invalid(new Dictionary<string, string[]>
-                {
-                    [nameof(command.CameraOwnerId)] = ["No person with this id."],
-                });
-            }
+            missing[nameof(command.CameraOwnerId)] = ["No person with this id."];
+        }
+        if (command.PlaceId is not null && place is null)
+        {
+            missing[nameof(command.PlaceId)] = ["No place with this id."];
+        }
+        if (missing.Count > 0)
+        {
+            return new UploadPhotoResult.Invalid(missing);
         }
 
         // Read twice (metadata, then upload), so work on our own seekable copy and leave the
@@ -91,6 +102,8 @@ public sealed class UploadPhotoHandler(
             Filename = Path.GetFileName(command.FileName),
             CameraOwnerId = cameraOwner?.Id,
             CameraOwner = cameraOwner,
+            PlaceId = place?.Id,
+            Place = place,
             DateCategory = string.IsNullOrWhiteSpace(command.DateCategory) ? null : command.DateCategory.Trim(),
             DateTaken = (command.DateTaken ?? metadata.DateTaken)?.ToUniversalTime(),
             Width = stored.Width,

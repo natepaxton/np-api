@@ -7,17 +7,20 @@ using Microsoft.Extensions.Options;
 using NpApi.Api.Auth;
 using NpApi.Api.Data;
 using NpApi.Api.Features.Photos.Storage;
+using NpApi.Api.Features.Places;
 
 namespace NpApi.Api.Features.Photos;
 
 // Field names match np-web's yellowstone photos.json so the frontend can switch to the API as-is.
 // cameraOwner is the person's display name (as in photos.json); cameraOwnerId identifies them.
-// Load photos with .Include(p => p.CameraOwner) before mapping.
+// lat/lng are the photo's own point; place carries the fallback point for the map.
+// Load photos with .Include(p => p.CameraOwner).Include(p => p.Place) before mapping.
 public sealed record PhotoResponse(
     Guid Id,
     string Filename,
     Guid? CameraOwnerId,
     string? CameraOwner,
+    PlaceResponse? Place,
     double? Lat,
     double? Lng,
     LocationSource? LocationSource,
@@ -36,6 +39,7 @@ public sealed record PhotoResponse(
         photo.Filename,
         photo.CameraOwnerId,
         photo.CameraOwner?.DisplayName,
+        photo.Place is null ? null : PlaceResponse.From(photo.Place),
         photo.Latitude,
         photo.Longitude,
         photo.LocationSource,
@@ -55,6 +59,7 @@ public sealed class UploadPhotoForm
 {
     public IFormFile? File { get; init; }
     public Guid? CameraOwnerId { get; init; }
+    public Guid? PlaceId { get; init; }
     public string? DateCategory { get; init; }
     public double? Lat { get; init; }
     public double? Lng { get; init; }
@@ -99,6 +104,7 @@ public static class PhotoEndpoints
         {
             var rows = await db.Photos.AsNoTracking()
                 .Include(p => p.CameraOwner)
+                .Include(p => p.Place)
                 .OrderBy(p => p.DateTaken == null)
                 .ThenBy(p => p.DateTaken)
                 .ThenBy(p => p.UploadedAt)
@@ -112,6 +118,7 @@ public static class PhotoEndpoints
         {
             var photo = await db.Photos.AsNoTracking()
                 .Include(p => p.CameraOwner)
+                .Include(p => p.Place)
                 .SingleOrDefaultAsync(p => p.Id == id, ct);
 
             return photo is null
@@ -142,6 +149,7 @@ public static class PhotoEndpoints
             form.File?.FileName ?? "",
             http.User.GetUserId(),
             form.CameraOwnerId,
+            form.PlaceId,
             form.DateCategory,
             form.Lat,
             form.Lng,

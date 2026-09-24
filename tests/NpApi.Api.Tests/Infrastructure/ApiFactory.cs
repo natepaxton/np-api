@@ -9,6 +9,7 @@ using Microsoft.IdentityModel.Protocols.OpenIdConnect;
 using NpApi.Api.Data;
 using NpApi.Api.Features.People;
 using NpApi.Api.Features.Photos.Storage;
+using NpApi.Api.Features.Places;
 using Testcontainers.PostgreSql;
 
 [assembly: AssemblyFixture(typeof(NpApi.Api.Tests.Infrastructure.ApiFactory))]
@@ -91,6 +92,18 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
         db.People.Add(person);
         await db.SaveChangesAsync();
         return person;
+    }
+
+    public async Task<Place> CreatePlaceAsync(string? city = "Gardiner", string? stateProvince = "Montana",
+        CountryCode? countryCode = CountryCode.US, double? latitude = 45.0319, double? longitude = -110.7057)
+    {
+        using var scope = Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var place = new Place { City = city, StateProvince = stateProvince, CountryCode = countryCode };
+        place.SetPoint(latitude, longitude);
+        db.Places.Add(place);
+        await db.SaveChangesAsync();
+        return place;
     }
 
     public static HttpClient Authorize(HttpClient client, string userId, params string[] permissions)

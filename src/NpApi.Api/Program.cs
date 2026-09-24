@@ -4,6 +4,7 @@ using NpApi.Api.Data;
 using NpApi.Api.Features.Me;
 using NpApi.Api.Features.People;
 using NpApi.Api.Features.Photos;
+using NpApi.Api.Features.Places;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -55,6 +56,7 @@ var api = app.MapGroup("/api/v1");
 api.MapMe();
 api.MapPhotos();
 api.MapPeople();
+api.MapPlaces();
 
 await app.ApplyMigrationsInDevelopmentAsync();
 

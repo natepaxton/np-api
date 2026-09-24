@@ -120,6 +120,36 @@ public class PhotoEndpointsTests(ApiFactory factory)
     }
 
     [Fact]
+    public async Task Upload_can_link_a_place_and_keeps_its_own_point()
+    {
+        var place = await factory.CreatePlaceAsync();
+
+        var response = await Writer().PostAsync("/api/v1/photos",
+            Form(PixelPhoto(), fields: ("placeId", place.Id.ToString())), Ct);
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        var photo = await ReadPhotoAsync(response);
+        Assert.Equal(place.Id, photo.Place!.Id);
+        Assert.Equal("Gardiner, Montana, US", photo.Place.DisplayName);
+        Assert.Equal((45.0319, -110.7057), (photo.Place.Lat, photo.Place.Lng));
+        // The photo's own EXIF point is kept separately from the place's point.
+        Assert.Equal(MammothLat, photo.Lat!.Value, 4);
+        Assert.Equal(LocationSource.Exif, photo.LocationSource);
+
+        var fetched = await ReadPhotoAsync(await Writer().GetAsync(response.Headers.Location, Ct));
+        Assert.Equal(photo.Place, fetched.Place);
+    }
+
+    [Fact]
+    public async Task Malformed_place_id_is_a_bad_request()
+    {
+        var response = await Writer().PostAsync("/api/v1/photos",
+            Form(PixelPhoto(), fields: ("placeId", "not-a-guid")), Ct);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
     public async Task Photo_without_gps_has_no_location()
     {
         var response = await Writer().PostAsync("/api/v1/photos",
@@ -139,6 +169,7 @@ public class PhotoEndpointsTests(ApiFactory factory)
         { "File", () => Form(new byte[PhotoEndpoints.MaxUploadBytes + 1]) },
         { "File", () => Form(PixelPhoto(), fileName: "notes.pdf", contentType: "application/pdf") },
         { "CameraOwnerId", () => Form(PixelPhoto(), cameraOwnerId: Guid.CreateVersion7()) },
+        { "PlaceId", () => Form(PixelPhoto(), fields: ("placeId", Guid.CreateVersion7().ToString())) },
         { "DateCategory", () => Form(PixelPhoto(), fields: ("dateCategory", new string('x', 51))) },
         { "Lat", () => Form(PixelPhoto(), fields: ("lat", "44.46")) },
         { "Lat", () => Form(PixelPhoto(), fields: [("lat", "91"), ("lng", "0")]) },

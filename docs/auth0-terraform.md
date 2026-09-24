@@ -75,7 +75,7 @@ terraform output spa_client_ids   # clientId for each frontend's Auth0 config
 ```
 
 Role permissions for np-api live in `role_permissions` in `terraform.tfvars` (currently `admin`:
-read + write for photos and people, `member`: read for both). The roles themselves and who is in them are managed in
+read + write for photos, people and places, `member`: read for all three). The roles themselves and who is in them are managed in
 the Auth0 dashboard. Terraform only **adds** np-api permissions to them (`auth0_role_permission`),
 so permissions the roles hold for other APIs are left alone.
 
