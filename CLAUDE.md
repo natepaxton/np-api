@@ -61,11 +61,12 @@ automatically on startup in Development only.
 - Data access: EF Core for writes and simple reads; Dapper for complex/reporting reads. Dapper
   query classes inject `AppDbContext` and call `db.Database.GetDbConnection()` per query. Never
   register that connection in DI: the container disposes it at the end of the request and breaks the
-  pooled `DbContext` for the next one (regression test in `NotesTests`). Never write through both in
-  one operation without a transaction.
+  pooled `DbContext` for the next one; give the first Dapper query an integration test that alternates
+  it with EF writes. Dapper is configured but unused so far. Never write through both in one
+  operation without a transaction.
 - Timestamps written by the app are truncated to microseconds (Postgres `timestamptz` precision) so
-  the value a POST returns matches later reads; see `Note.CreatedAt`.
-- Database naming is snake_case (EFCore.NamingConventions). Raw SQL uses snake_case: `created_at`, `owner_id`.
+  the value a POST returns matches later reads; use `Timestamps.UtcNow()`.
+- Database naming is snake_case (EFCore.NamingConventions). Raw SQL uses snake_case: `uploaded_at`, `camera_owner`.
 - Dapper row types are records with `init` properties, not positional records — constructor mapping
   fails on snake_case columns and on `timestamptz` (read as `DateTime`).
 - Manual transactions must be wrapped in `db.Database.CreateExecutionStrategy().ExecuteAsync(...)`

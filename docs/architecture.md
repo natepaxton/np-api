@@ -22,10 +22,11 @@ src/NpApi.Api/
   Auth/                   Auth0 options + JWT setup + claim helpers
   Data/                   AppDbContext, migrations, data registration
   Features/
-    Notes/
-      Note.cs             entity + IEntityTypeConfiguration
-      NoteQueries.cs      Dapper read queries
-      NoteEndpoints.cs    AddNotes() + MapNotes()
+    Photos/
+      Photo.cs                  entity + LocationSource + IEntityTypeConfiguration
+      PhotoEndpoints.cs         AddPhotos() + MapPhotos()
+      PhotoMetadataReader.cs    EXIF capture time and GPS
+      Storage/                  IPhotoStorage + Cloudinary implementation
     Me/
 ```
 
@@ -51,7 +52,7 @@ app.MapNotes();
 
 | Lifetime | Use for |
 | --- | --- |
-| Scoped (per request) | `AppDbContext` and anything that depends on it (`NoteQueries`) |
+| Scoped (per request) | `AppDbContext` and anything that depends on it (e.g. a Dapper query class) |
 | Singleton | Stateless services, caches, `TimeProvider.System`, typed options |
 | Transient | Rarely needed; lightweight stateless objects with no shared state |
 
@@ -65,7 +66,7 @@ into endpoints or feature services directly.
 
 **4. Add interfaces at real seams only.** Good candidates: external systems (email, payments, the
 Auth0 Management API), or when you genuinely have multiple implementations (use keyed services:
-`AddKeyedScoped<IStorage, S3Storage>("s3")`). Concrete classes like `NoteQueries` don't need an
+`AddKeyedScoped<IStorage, S3Storage>("s3")`). Concrete classes (a Dapper query class, say) don't need an
 interface; tests can hit a real Postgres via Aspire's testing package or Testcontainers.
 
 **5. Options pattern for configuration**, validated at startup so a missing setting fails fast
@@ -95,9 +96,16 @@ exchange it is thin, fast, and lets you use any Postgres feature (CTEs, window f
 `jsonb` operators, full-text search) without fighting a LINQ translator.
 
 ```csharp
-var rows = await connection.QueryAsync<NoteSummary>(
-    "select id, title, created_at from notes where owner_id = @ownerId",
-    new { ownerId });   // parameters are always sent as real parameters, never concatenated
+// How many photos carry each tag, for one camera owner. Easy in SQL, awkward in LINQ.
+var counts = await connection.QueryAsync<TagCount>(
+    """
+    select tag, count(*) as photo_count
+    from photos, unnest(tags) as tag
+    where camera_owner = @owner
+    group by tag
+    order by photo_count desc
+    """,
+    new { owner });   // parameters are always sent as real parameters, never concatenated
 ```
 
 ### How they're combined here
@@ -111,13 +119,15 @@ var rows = await connection.QueryAsync<NoteSummary>(
 - **Don't register EF's connection in DI** (for example `AddScoped<IDbConnection>(sp => ...GetDbConnection())`).
   The container disposes whatever a factory returns at the end of the request. The `DbContext` then
   goes back to EF's pool holding a disposed connection, and the next request that gets it fails with
-  `ObjectDisposedException`. `NotesTests.Dapper_reads_and_ef_writes_can_alternate_across_requests`
-  guards against this.
+  `ObjectDisposedException`. It only shows up once a pooled context is reused, so give the first
+  Dapper query an integration test that alternates it with an EF write over several requests.
+- Dapper is installed and configured but not used yet. Add the first query class when there's a read
+  that's clearer in SQL (e.g. tag counts or facets for filtering).
 
 ### Rules of thumb
 
 - Tables and columns are snake_case (`UseSnakeCaseNamingConvention()`), so SQL needs no quoting.
-  Dapper maps `created_at` → `CreatedAt` because `DefaultTypeMap.MatchNamesWithUnderscores = true`.
+  Dapper maps `uploaded_at` → `UploadedAt` because `DefaultTypeMap.MatchNamesWithUnderscores = true`.
 - Dapper result types are records with `init` properties. Positional records fail: Dapper's
   constructor mapping needs exact column names **and** types, and Npgsql returns `timestamptz` as
   `DateTime`, not `DateTimeOffset`.
