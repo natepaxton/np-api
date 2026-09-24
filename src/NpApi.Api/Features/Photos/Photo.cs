@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using NpApi.Api.Data;
 using NpApi.Api.Features.People;
+using NpApi.Api.Features.Places;
 
 namespace NpApi.Api.Features.Photos;
 
@@ -26,6 +27,11 @@ public sealed class Photo
 
     // People appearing in the photo.
     public List<PhotoPerson> TaggedPeople { get; } = [];
+
+    // The named place the photo belongs to, if any. The photo's own point (below) is where it was
+    // taken; the map falls back to Place's point when the photo has none.
+    public Guid? PlaceId { get; set; }
+    public Place? Place { get; set; }
 
     public double? Latitude { get; private set; }
     public double? Longitude { get; private set; }
@@ -85,6 +91,12 @@ internal sealed class PhotoConfiguration : IEntityTypeConfiguration<Photo>
         // text[] with a GIN index, so "photos tagged X" stays an index lookup as the table grows.
         builder.HasIndex(p => p.Tags).HasMethod("gin");
         builder.HasIndex(p => p.DateTaken);
+
+        // Deleting a place unlinks its photos; the photos themselves stay.
+        builder.HasOne(p => p.Place)
+            .WithMany()
+            .HasForeignKey(p => p.PlaceId)
+            .OnDelete(DeleteBehavior.SetNull);
 
         builder.ToTable(table =>
         {

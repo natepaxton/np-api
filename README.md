@@ -39,6 +39,9 @@ https://localhost:7223:
 | `GET /api/v1/photos`, `GET /api/v1/photos/{id}` | `read:photos` | Photos with thumbnail/medium/full URLs |
 | `GET /api/v1/people`, `GET /api/v1/people/{id}` | `read:people` | People (photo subjects, camera owners) |
 | `POST`/`PUT`/`DELETE /api/v1/people[/{id}]` | `write:people` | Manage people; delete is 409 while they own photos |
+| `GET /api/v1/places`, `GET /api/v1/places/{id}` | `read:places` | Places (city, state/province, ISO country code, representative point) |
+| `GET /api/v1/countries` | `read:places` | Supported countries (US, CA, MX) |
+| `POST`/`PUT`/`DELETE /api/v1/places[/{id}]` | `write:places` | Manage places; deleting unlinks photos |
 
 ## Documentation
 
@@ -50,5 +53,6 @@ https://localhost:7223:
 - [Deployment](docs/deployment.md)
 - [Photos: model, upload, locations](docs/photos.md)
 - [People: model, tagging link, camera owners](docs/people.md)
+- [Places: model, map point fallback](docs/places.md)
 - [Testing with Postman](docs/postman.md)
 - [Automated tests, coverage and CI](docs/testing.md)

@@ -11,6 +11,7 @@ and its tags. Source: `src/NpApi.Api/Features/Photos/`.
 | `CloudinaryPublicId` | `varchar(255)`, unique | e.g. `np-api/photos/0199…`. One asset maps to one row. |
 | `Url` | `varchar(1024)` | The `secure_url` Cloudinary returned for the original |
 | `Filename` | `varchar(255)` | Original file name, informational only |
+| `PlaceId` | `uuid?` → `places.id` | The named place it belongs to. See [places.md](places.md). |
 | `CameraOwnerId` | `uuid?` → `people.id` | Whose camera took it (not necessarily who uploaded it). See [people.md](people.md). |
 | `Latitude`, `Longitude` | `double?` | Both or neither, range-checked by the database |
 | `LocationSource` | `Exif` / `Inferred` / `Manual`, nullable | Set exactly when coordinates are set |
@@ -46,6 +47,7 @@ Requires the `write:photos` permission. `multipart/form-data`:
 | --- | --- | --- |
 | `file` | yes | JPEG, PNG, WebP or HEIC, max **10 MB** (Cloudinary free-plan image limit) |
 | `cameraOwnerId` | no | Id of an existing person. Unknown ids get 400. |
+| `placeId` | no | Id of an existing place. Unknown ids get 400. |
 | `dateCategory` | no | |
 | `lat` + `lng` | no | Overrides EXIF; saved as `LocationSource = Manual` |
 | `dateTaken` | no | ISO 8601 with offset; overrides EXIF |
@@ -98,9 +100,10 @@ messenger or share flow that strips metadata. Upload originals where possible. O
    (Settings → Location → Location services → Timeline → Export) and match photo timestamps
    against the track. This is the most accurate fallback for photos from a phone that had location
    history on but camera geotagging off.
-3. **Known places from tags.** When a photo is tagged with a place (an NPS site like
-   `mammoth-cave`, or an attraction), use that place's coordinates. The NPS API has a free key and
-   returns park coordinates. Mark these `Inferred`, since they're approximate.
+3. **Link the photo to a Place.** Implemented: upload with `placeId` (see [places.md](places.md)). The
+   photo's own point stays null, and the map falls back to the place's representative point, shown
+   as approximate. yellowstone's NPS sites are good first places. The NPS API has a free key and
+   returns park coordinates.
 4. **Landmark recognition.** Google Cloud Vision landmark detection returns coordinates for
    well-known sights (Old Faithful, Grand Prismatic). It's paid beyond a small free tier, only
    covers famous landmarks, and needs billing enabled.

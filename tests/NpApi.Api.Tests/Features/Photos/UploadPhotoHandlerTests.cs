@@ -97,6 +97,21 @@ public class UploadPhotoHandlerTests(ApiFactory factory)
         Assert.Empty(storage.Uploaded);
     }
 
+    [Fact]
+    public async Task Unknown_camera_owner_and_place_are_both_reported()
+    {
+        var storage = new FakePhotoStorage();
+        var (handler, _, scope) = Create(storage);
+        using var _ = scope;
+        var command = Command(new MemoryStream(TestImages.Jpeg()), Guid.CreateVersion7()) with { PlaceId = Guid.CreateVersion7() };
+
+        var result = await handler.HandleAsync(command, Ct);
+
+        var errors = Assert.IsType<UploadPhotoResult.Invalid>(result).Errors;
+        Assert.Equal(["CameraOwnerId", "PlaceId"], errors.Keys.Order());
+        Assert.Empty(storage.Uploaded);
+    }
+
     [Theory]
     [InlineData(FakePhotoStorage.Failure.InvalidImage, typeof(UploadPhotoResult.InvalidImage))]
     [InlineData(FakePhotoStorage.Failure.Unavailable, typeof(UploadPhotoResult.StorageUnavailable))]

@@ -87,6 +87,11 @@ automatically on startup in Development only.
 - Never put connection strings or secrets in `appsettings*.json`. Local: user secrets on the
   AppHost. Deployed: environment variables (`ConnectionStrings__npdb`, `Auth0__Domain`, `Auth0__Audience`,
   `Cloudinary__ApiKey`, `Cloudinary__ApiSecret`).
+- Photos keep their own point (`latitude`/`longitude`/`location_source`); a Place's point is a separate
+  representative point used as the map fallback. Don't move or copy one into the other.
+- Countries are ISO 3166-1 alpha-2 codes: the `CountryCode` enum plus the seeded `countries` lookup
+  table (FK from `places.country_code`). Never rename an enum member (it's the stored value). To add
+  one, add the member and its `Country.Names` entry, then add a migration; a test checks they agree.
 - People are referenced by id (`camera_owner_id`, `photo_people`), never by name, and are never stored
   in `Photo.Tags`.
 - Photo capture times come from EXIF offset or GPS UTC; never interpret EXIF local time in the
@@ -112,6 +117,7 @@ automatically on startup in Development only.
 - `docs/health-checks.md` — endpoints and probe configuration
 - `docs/deployment.md` — Cloud Run (recommended) and alternatives
 - `docs/people.md` — Person model, photo_people tagging link, camera owner, deletion rules
+- `docs/places.md` — Place model, photo place link, photo point vs place point for the map
 - `docs/photos.md` — Photo model, id strategy, upload flow, EXIF dates, finding locations
 - `docs/postman.md` — local testing with Postman
 - `docs/testing.md` — test approach, coverage, CI, GitHub settings

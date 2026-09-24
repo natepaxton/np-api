@@ -8,6 +8,9 @@ public static class Permissions
     public const string WritePhotos = "write:photos";
     public const string ReadPeople = "read:people";
     public const string WritePeople = "write:people";
+    public const string ReadPlaces = "read:places";
+    public const string WritePlaces = "write:places";
 
-    public static readonly IReadOnlyList<string> All = [ReadPhotos, WritePhotos, ReadPeople, WritePeople];
+    public static readonly IReadOnlyList<string> All =
+        [ReadPhotos, WritePhotos, ReadPeople, WritePeople, ReadPlaces, WritePlaces];
 }

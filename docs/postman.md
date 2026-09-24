@@ -70,12 +70,12 @@ will be `<client-id>@clients`.
 | `GET {{baseUrl}}/health` (No Auth) | 200, includes `AppDbContext` |
 | `GET {{baseUrl}}/api/v1/me` without token | 401 |
 | `GET {{baseUrl}}/api/v1/me` with token | 200 with your `userId` and `permissions` |
-| `POST {{baseUrl}}/api/v1/photos`, Body → form-data: `file` (type **File**, a JPEG), optionally `cameraOwnerId` = a person's `id` | 201 with `thumbnail`/`medium`/`full` URLs, and `lat`/`lng`/`dateTaken` from the photo's EXIF. Needs `write:photos`. |
+| `POST {{baseUrl}}/api/v1/photos`, Body → form-data: `file` (type **File**, a JPEG), optionally `cameraOwnerId` = a person's `id` and `placeId` = a place's `id` | 201 with `thumbnail`/`medium`/`full` URLs, and `lat`/`lng`/`dateTaken` from the photo's EXIF. Needs `write:photos`. |
 | `GET {{baseUrl}}/api/v1/photos` | 200, photos ordered by `dateTaken`. Needs `read:photos`. |
 | `POST {{baseUrl}}/api/v1/people` body `{"firstName":"Nate"}` | 201 with the person's `id` (use it as `cameraOwnerId`). Needs `write:people`. |
 
 Photo and people endpoints return **403** unless your Auth0 user has a role with the matching
-`read:`/`write:` permission (`admin` has all four; `member` has the two `read:` ones). Check `permissions` in `GET /api/v1/me`. Local uploads go to Cloudinary's
+`read:`/`write:` permission (`admin` has all of them; `member` has only the `read:` ones). Check `permissions` in `GET /api/v1/me`. Local uploads go to Cloudinary's
 `np-api/dev/photos` folder.
 
 When you get a 401, the `WWW-Authenticate` response header says why (for example
