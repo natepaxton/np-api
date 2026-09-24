@@ -4,6 +4,10 @@ on:
   push:
     branches: [main]
   pull_request:
+  # Weekly run on main so newly published package vulnerabilities surface without a code change.
+  schedule:
+    - cron: "0 13 * * 1"
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -29,6 +33,10 @@ jobs:
       - name: Build
         run: dotnet build --configuration Release
 
+      # Fails when an entity or configuration changed without `dotnet ef migrations add`.
+      - name: Check for missing EF migrations
+        run: dotnet ef migrations has-pending-model-changes --project src/NpApi.Api --configuration Release --no-build
+
       # Integration tests start a throwaway Postgres container with Testcontainers; the hosted
       # runner has Docker. No secrets needed: tests sign their own JWTs instead of calling Auth0.
       - name: Test with coverage
@@ -41,7 +49,7 @@ jobs:
         if: ${{ !cancelled() }}
         run: >
           dotnet reportgenerator -reports:"TestResults/**/*.cobertura.xml" -targetdir:coverage-report
-          -reporttypes:"MarkdownSummaryGithub;Html"
+          -reporttypes:"MarkdownSummaryGithub;JsonSummary;Html"
 
       - name: Publish coverage summary
         if: ${{ !cancelled() }}
@@ -52,6 +60,60 @@ jobs:
         with:
           name: coverage-report
           path: coverage-report
+
+      # Minimums are in scripts/check-coverage.sh (line 80%, branch 70%).
+      - name: Enforce minimum coverage
+        run: scripts/check-coverage.sh coverage-report/Summary.json
+
+  format:
+    name: Format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+
+      # Rules come from .editorconfig. Fix locally with `dotnet format`.
+      - name: Verify formatting
+        run: dotnet format --verify-no-changes
+
+  vulnerable-packages:
+    name: Vulnerable packages
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+
+      - name: Restore
+        run: dotnet restore
+
+      # Fails on High/Critical advisories (direct or transitive); lower severities are warnings.
+      - name: Check for vulnerable packages
+        run: scripts/check-vulnerable-packages.sh NpApi.slnx
+
+  container-image:
+    name: Container image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+
+      # The same build that production deploys, loaded into the runner's Docker (not pushed).
+      - name: Build production image
+        run: >
+          dotnet publish src/NpApi.Api --configuration Release -t:PublishContainer
+          -p ContainerRepository=np-api -p ContainerImageTag=ci -p ContainerRuntimeIdentifier=linux-x64
+
+      - name: Smoke test image
+        run: scripts/smoke-test-image.sh np-api:ci
 
   terraform:
     name: Terraform checks (Auth0)

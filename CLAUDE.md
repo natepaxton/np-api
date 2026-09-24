@@ -12,10 +12,14 @@ dotnet build
 dotnet ef migrations add <Name> --project src/NpApi.Api --output-dir Data/Migrations
 dotnet ef migrations remove --project src/NpApi.Api  # only for migrations not yet applied anywhere shared
 
+dotnet format                                        # CI fails on formatting drift (.editorconfig)
 dotnet test                                          # all tests; needs Docker (Testcontainers Postgres)
 dotnet test --coverage --coverage-output-format cobertura --coverage-output coverage.cobertura.xml \
   --coverage-settings coverage.config --results-directory TestResults
-dotnet reportgenerator -reports:"TestResults/**/*.cobertura.xml" -targetdir:coverage-report -reporttypes:"TextSummary;Html"
+dotnet reportgenerator -reports:"TestResults/**/*.cobertura.xml" -targetdir:coverage-report -reporttypes:"JsonSummary;TextSummary;Html"
+scripts/check-coverage.sh                            # CI minimum: 80% line, 70% branch
+scripts/check-vulnerable-packages.sh                 # CI fails on High/Critical advisories
+dotnet ef migrations has-pending-model-changes --project src/NpApi.Api   # CI fails if a migration is missing
 
 cd infra/auth0 && set -a && source .env && set +a && terraform plan     # Auth0 changes; never apply without reviewing the plan
 ```
@@ -30,7 +34,9 @@ automatically on startup in Development only.
 - `infra/auth0/` — Terraform for the Auth0 API, SPA clients, and client grants. Auth0 changes go
   here, not in the dashboard.
 - `tests/NpApi.Api.Tests` — xUnit v3 (Microsoft Testing Platform) integration tests; see `docs/testing.md`.
-- `.github/workflows/ci.yml` — build, test, coverage, Terraform fmt/validate on push and PR.
+- `.github/workflows/ci.yml` — build/test/coverage gate/migrations check, format, vulnerable packages,
+  container build + smoke test, Terraform fmt/validate. Details in `docs/testing.md`.
+- `scripts/` — CI helper scripts, also runnable locally.
 - `src/NpApi.Api` — the deployable API.
   - `Program.cs` — composition root; should read as a list of `AddX()` / `MapX()` calls.
   - `Data/` — `AppDbContext`, migrations, data DI registration.
@@ -77,6 +83,7 @@ automatically on startup in Development only.
   (real Postgres via Testcontainers, tokens from `TestAuth`). Use `TestAuth.NewUserId()` per test so
   tests stay isolated without cleanup.
 - Tests must pass on Linux (CI) — don't rely on macOS behavior such as its clock resolution.
+- Entity/configuration changes need a migration in the same change; CI checks for missing ones.
 
 ## Docs
 

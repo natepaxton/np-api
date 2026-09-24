@@ -33,12 +33,40 @@ open coverage-report/index.html
 
 ## CI
 
-`.github/workflows/ci.yml` runs on every push to `main` and every pull request:
+`.github/workflows/ci.yml` runs on every push to `main` and every pull request. It also runs weekly
+on `main` (Mondays 13:00 UTC) so newly published vulnerabilities surface without a code change,
+and you can start it by hand from the Actions tab. The jobs run in parallel. Each is a separate
+check you can require in branch protection.
 
-| Job | Steps |
-| --- | --- |
-| Build and test | restore tools → `dotnet build -c Release` → tests with coverage → coverage summary on the run page → HTML report uploaded as the `coverage-report` artifact |
-| Terraform checks (Auth0) | `terraform fmt -check`, `terraform init -backend=false`, `terraform validate`. Never contacts the Auth0 tenant. |
+| Check | What fails it | Fix locally |
+| --- | --- | --- |
+| **Build and test** | Compile error. **A model change without a migration** (`dotnet ef migrations has-pending-model-changes`). A failing test. **Coverage below the minimum.** | `dotnet ef migrations add <Name> --project src/NpApi.Api --output-dir Data/Migrations`; `dotnet test` |
+| **Format** | Code that doesn't match `.editorconfig` (`dotnet format --verify-no-changes`) | `dotnet format` |
+| **Vulnerable packages** | A direct or transitive NuGet package with a **High or Critical** advisory. Low/Moderate only warn. | `scripts/check-vulnerable-packages.sh`, then update the package |
+| **Container image** | The production image doesn't build (`dotnet publish -t:PublishContainer`, linux-x64), or doesn't start and serve `/alive` = 200 and `/api/v1/me` = 401 | `scripts/smoke-test-image.sh` after publishing locally |
+| **Terraform checks (Auth0)** | Unformatted `.tf`, provider/lock mismatch, invalid configuration. Doesn't read `terraform.tfvars` or contact Auth0. | `terraform fmt` in `infra/auth0` |
+
+### Coverage minimum
+
+**80% line and 70% branch** coverage, measured on the ReportGenerator summary (the same numbers
+shown on the run page), after excluding migrations and generated code (`coverage.config`). Today
+it's about 99% line and 86% branch.
+
+This follows common practice: 80% is the most widely used line-coverage bar, and branch coverage
+naturally runs lower. The floor sits well below current coverage on purpose. It catches untested
+features or large deletions of tests without failing a PR over a few lines. If coverage stays
+high, raise the minimums (`MIN_LINE_COVERAGE` / `MIN_BRANCH_COVERAGE` defaults in
+`scripts/check-coverage.sh`) instead of chasing 100%.
+
+### Formatting
+
+`.editorconfig` enforces layout and whitespace only (indentation, braces, newlines, `using`
+order). Code-style preferences are suggestions, so they show in the IDE but don't fail CI. Two ways
+to change this later:
+
+- **Too strict:** relax or remove the specific rule in `.editorconfig`, or delete the `format` job
+  from the workflow (and remove it from required checks).
+- **Enforce more:** raise individual rules to `warning` in `.editorconfig`.
 
 ### GitHub settings
 
