@@ -50,9 +50,9 @@ Requires the `write:photos` permission. `multipart/form-data`:
 | `lat` + `lng` | no | Overrides EXIF; saved as `LocationSource = Manual` |
 | `dateTaken` | no | ISO 8601 with offset; overrides EXIF |
 
-Flow:
+The endpoint checks the file and form, then hands off to `UploadPhotoHandler`, which does the rest:
 
-1. Validate, then read EXIF (capture time and GPS) from the upload in memory.
+1. Validate the fields, then read EXIF (capture time and GPS) from its own in-memory copy of the upload.
 2. Upload to Cloudinary as `{Cloudinary:Folder}/{id}` with `overwrite=false`.
 3. Save the row. If saving fails, delete the just-uploaded image so Cloudinary has no orphans.
 
