@@ -14,6 +14,12 @@ variable "api_permissions" {
   type        = map(string)
 }
 
+variable "role_permissions" {
+  description = "np-api permissions per existing Auth0 role (role name => permission names). Each permission must be in api_permissions."
+  type        = map(list(string))
+  default     = {}
+}
+
 variable "spas" {
   description = "Single-page applications allowed to call the API on behalf of signed-in users. The map key is a stable Terraform address; don't rename it after import."
   type = map(object({

@@ -18,6 +18,8 @@ dotnet dev-certs https --trust
 # One-time: tell the API about your Auth0 tenant (or enter them in the dashboard when prompted)
 dotnet user-secrets --project src/NpApi.AppHost set Parameters:auth0-domain <tenant>.us.auth0.com
 dotnet user-secrets --project src/NpApi.AppHost set Parameters:auth0-audience <your API identifier>
+dotnet user-secrets --project src/NpApi.AppHost set Parameters:cloudinary-api-key <key>
+dotnet user-secrets --project src/NpApi.AppHost set Parameters:cloudinary-api-secret <secret>
 
 dotnet run --project src/NpApi.AppHost
 ```
@@ -34,6 +36,8 @@ https://localhost:7223:
 | `GET /openapi/v1.json` | anonymous, Development only | OpenAPI document for Postman |
 | `GET /api/v1/me` | bearer token | Echoes your Auth0 user id and permissions |
 | `GET/POST /api/v1/notes`, `GET /api/v1/notes/{id}` | bearer token | Sample feature (EF writes, Dapper reads) |
+| `POST /api/v1/photos` (multipart) | `write:photos` | Upload to Cloudinary; reads EXIF date and GPS |
+| `GET /api/v1/photos`, `GET /api/v1/photos/{id}` | `read:photos` | Photos with thumbnail/medium/full URLs |
 
 ## Documentation
 
@@ -43,5 +47,6 @@ https://localhost:7223:
 - [Auth0 with Terraform](docs/auth0-terraform.md)
 - [Health checks](docs/health-checks.md)
 - [Deployment](docs/deployment.md)
+- [Photos: model, upload, locations](docs/photos.md)
 - [Testing with Postman](docs/postman.md)
 - [Automated tests, coverage and CI](docs/testing.md)

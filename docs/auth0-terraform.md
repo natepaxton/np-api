@@ -74,6 +74,11 @@ terraform apply
 terraform output spa_client_ids   # clientId for each frontend's Auth0 config
 ```
 
+Role permissions for np-api live in `role_permissions` in `terraform.tfvars` (currently `admin`:
+read + write photos, `member`: read photos). The roles themselves and who is in them are managed in
+the Auth0 dashboard. Terraform only **adds** np-api permissions to them (`auth0_role_permission`),
+so permissions the roles hold for other APIs are left alone.
+
 Adding a SPA means adding an entry to `spas` in `terraform.tfvars`. The app, its PKCE settings,
 and its grant to the API are created together.
 

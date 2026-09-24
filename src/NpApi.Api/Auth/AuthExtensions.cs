@@ -27,12 +27,21 @@ public static class AuthExtensions
                 options.TokenValidationParameters.NameClaimType = "sub";
             });
 
-        builder.Services.AddAuthorizationBuilder()
+        var authorization = builder.Services.AddAuthorizationBuilder()
             // Secure by default: every endpoint requires a valid token unless it opts out with
             // AllowAnonymous() (health checks, OpenAPI document).
             .SetFallbackPolicy(new AuthorizationPolicyBuilder()
                 .RequireAuthenticatedUser()
                 .Build());
+
+        // One policy per Auth0 permission. Auth0 puts them in the token's "permissions" array
+        // (RBAC with "Add Permissions in the Access Token").
+        foreach (var permission in Permissions.All)
+        {
+            authorization.AddPolicy(permission, policy => policy
+                .RequireAuthenticatedUser()
+                .RequireClaim("permissions", permission));
+        }
 
         return builder;
     }

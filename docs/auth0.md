@@ -45,17 +45,16 @@ The API fails at startup if either is missing (`ValidateOnStart`).
 
 ## Permission-based authorization
 
-When you turn on RBAC, add a policy per permission and apply it to endpoints:
+RBAC is on for np-api. Every permission in `Auth/Permissions.cs` is registered as a policy of the
+same name, and endpoints require them explicitly:
 
 ```csharp
-// AuthExtensions.AddAuth0()
-builder.Services.AddAuthorizationBuilder()
-    .SetFallbackPolicy(...)
-    .AddPolicy("write:notes", p => p.RequireClaim("permissions", "write:notes"));
-
-// endpoint
-notes.MapPost("/", ...).RequireAuthorization("write:notes");
+photos.MapPost("/", ...).RequireAuthorization(Permissions.WritePhotos);
 ```
+
+To add a permission, add it to `api_permissions` in `infra/auth0/terraform.tfvars` (and to the SPA
+grants' `scopes`), apply, add the constant to `Permissions`, and assign it to a role in Auth0. A
+token without it gets **403**; a missing or invalid token gets **401**.
 
 Auth0 puts permissions in a JSON array claim, and the JWT handler turns each element into its own
 `permissions` claim, so `RequireClaim` works directly.

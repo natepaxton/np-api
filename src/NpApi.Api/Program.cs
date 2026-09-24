@@ -1,15 +1,22 @@
+using System.Text.Json.Serialization;
 using NpApi.Api.Auth;
 using NpApi.Api.Data;
 using NpApi.Api.Features.Me;
 using NpApi.Api.Features.Notes;
+using NpApi.Api.Features.Photos;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.AddServiceDefaults();
 builder.AddData();
 builder.AddAuth0();
+builder.AddPhotos();
 
 builder.Services.AddProblemDetails();
+
+// Enums as strings in JSON ("Exif", not 0).
+builder.Services.ConfigureHttpJsonOptions(options =>
+    options.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 
 // Browser frontends (SPAs) calling this API need their origins listed here, e.g.
 // Cors__AllowedOrigins__0=https://app.example.com
@@ -42,6 +49,7 @@ app.MapDefaultEndpoints();
 var api = app.MapGroup("/api/v1");
 api.MapMe();
 api.MapNotes();
+api.MapPhotos();
 
 await app.ApplyMigrationsInDevelopmentAsync();
 

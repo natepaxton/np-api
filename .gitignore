@@ -493,3 +493,6 @@ coverage-report/
 
 # Local mcp config
 .mcp.json
+
+# Local access token from scripts/get-dev-token.py
+.dev-token

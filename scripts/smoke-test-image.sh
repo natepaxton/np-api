@@ -21,6 +21,8 @@ trap cleanup EXIT
 docker run -d --name "$name" -p "$port:8080" \
   -e Auth0__Domain=smoke-test.invalid \
   -e Auth0__Audience=np-api \
+  -e Cloudinary__ApiKey=smoke-test \
+  -e Cloudinary__ApiSecret=smoke-test \
   -e "ConnectionStrings__npdb=Host=db.invalid;Database=npdb;Username=x;Password=x;Timeout=2" \
   "$image" >/dev/null
 

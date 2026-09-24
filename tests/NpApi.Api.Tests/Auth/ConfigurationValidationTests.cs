@@ -16,6 +16,8 @@ public class ConfigurationValidationTests(ApiFactory factory)
             builder.UseSetting("ConnectionStrings:npdb", factory.ConnectionString);
             builder.UseSetting("Auth0:Domain", "");
             builder.UseSetting("Auth0:Audience", "");
+            builder.UseSetting("Cloudinary:ApiKey", "test-key");
+            builder.UseSetting("Cloudinary:ApiSecret", "test-secret");
         });
 
         var exception = Assert.ThrowsAny<Exception>(() => misconfigured.CreateClient());
