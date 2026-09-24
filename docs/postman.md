@@ -27,6 +27,19 @@ Set the collection's base URL to `{{baseUrl}}`.
 
 ## 3. Get an Auth0 token
 
+**Quickest: `scripts/get-dev-token.py`.** It runs the same PKCE sign-in as the frontends: your
+browser opens Auth0's login, and the script catches the redirect on `http://localhost:8765/callback`,
+exchanges the code, and saves the access token to `.dev-token` (gitignored, owner-only). It prints
+the token's `sub` and `permissions`. Use `--print` to also print the raw token for pasting into
+Postman (Authorization → Bearer Token), or call the API directly:
+
+```sh
+scripts/get-dev-token.py
+curl -k -H "Authorization: Bearer $(cat .dev-token)" https://localhost:7223/api/v1/me
+```
+
+Or let Postman fetch tokens itself:
+
 Configure auth once on the **collection** (Authorization tab → type **OAuth 2.0**). Requests
 inherit it.
 
@@ -59,6 +72,12 @@ will be `<client-id>@clients`.
 | `GET {{baseUrl}}/api/v1/me` with token | 200 with your `userId` and `permissions` |
 | `POST {{baseUrl}}/api/v1/notes` body `{"title":"hi"}` | 201 with `Location` header |
 | `GET {{baseUrl}}/api/v1/notes` | 200, list including the note |
+| `POST {{baseUrl}}/api/v1/photos`, Body → form-data: `file` (type **File**, a JPEG), `cameraOwner` = `Nate` | 201 with `thumbnail`/`medium`/`full` URLs, and `lat`/`lng`/`dateTaken` from the photo's EXIF. Needs `write:photos`. |
+| `GET {{baseUrl}}/api/v1/photos` | 200, photos ordered by `dateTaken`. Needs `read:photos`. |
+
+Photo endpoints return **403** unless your Auth0 user has a role with `read:photos` /
+`write:photos`. Check `permissions` in `GET /api/v1/me`. Local uploads go to Cloudinary's
+`np-api/dev/photos` folder.
 
 When you get a 401, the `WWW-Authenticate` response header says why (for example
 `invalid_token, error_description="The audience ... is invalid"`). Paste the token into

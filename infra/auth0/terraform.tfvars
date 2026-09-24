@@ -8,6 +8,12 @@ api_permissions = {
   "write:photos" = "Create and update photo records"
 }
 
+# What each Auth0 role may do in np-api. Users get these in their token's "permissions" claim.
+role_permissions = {
+  admin  = ["read:photos", "write:photos"]
+  member = ["read:photos"]
+}
+
 spas = {
   # One shared SPA client for every np-web app (sandbox, yellowstone, roadie). The Auth0 SDK
   # sends window.location.origin as both redirect_uri and logout returnTo, so every URL is an
@@ -38,10 +44,11 @@ spas = {
     scopes = ["read:photos", "write:photos"]
   }
 
-  # Postman as a public PKCE client (no secret). Leave Client Secret empty in Postman.
+  # Public PKCE client (no secret) for developer tools: Postman (leave Client Secret empty) and
+  # scripts/get-dev-token.py, which listens on localhost:8765 for the redirect.
   postman = {
     name          = "np-postman"
-    callback_urls = ["https://oauth.pstmn.io/v1/callback"]
+    callback_urls = ["https://oauth.pstmn.io/v1/callback", "http://localhost:8765/callback"]
     logout_urls   = []
     web_origins   = []
     scopes        = ["read:photos", "write:photos"]

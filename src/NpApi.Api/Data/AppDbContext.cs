@@ -1,11 +1,13 @@
 using Microsoft.EntityFrameworkCore;
 using NpApi.Api.Features.Notes;
+using NpApi.Api.Features.Photos;
 
 namespace NpApi.Api.Data;
 
 public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(options)
 {
     public DbSet<Note> Notes => Set<Note>();
+    public DbSet<Photo> Photos => Set<Photo>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

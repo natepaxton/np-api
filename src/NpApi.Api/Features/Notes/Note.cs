@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using NpApi.Api.Data;
 
 namespace NpApi.Api.Features.Notes;
 
@@ -9,12 +10,7 @@ public sealed class Note
     public required string OwnerId { get; init; }
     public required string Title { get; set; }
     public string? Body { get; set; }
-    public DateTimeOffset CreatedAt { get; init; } = TruncateToMicroseconds(DateTimeOffset.UtcNow);
-
-    // Postgres timestamptz stores microseconds; .NET ticks are 100ns. Truncating up front keeps the
-    // value returned by POST identical to what later reads return from the database.
-    private static DateTimeOffset TruncateToMicroseconds(DateTimeOffset value) =>
-        value.AddTicks(-(value.Ticks % TimeSpan.TicksPerMicrosecond));
+    public DateTimeOffset CreatedAt { get; init; } = Timestamps.UtcNow();
 }
 
 internal sealed class NoteConfiguration : IEntityTypeConfiguration<Note>

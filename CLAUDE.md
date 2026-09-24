@@ -21,6 +21,8 @@ scripts/check-coverage.sh                            # CI minimum: 80% line, 70%
 scripts/check-vulnerable-packages.sh                 # CI fails on High/Critical advisories
 dotnet ef migrations has-pending-model-changes --project src/NpApi.Api   # CI fails if a migration is missing
 
+scripts/get-dev-token.py                             # Auth0 sign-in (PKCE) → .dev-token for local API calls
+
 cd infra/auth0 && set -a && source .env && set +a && terraform plan     # Auth0 changes; never apply without reviewing the plan
 ```
 
@@ -68,11 +70,19 @@ automatically on startup in Development only.
   fails on snake_case columns and on `timestamptz` (read as `DateTime`).
 - Manual transactions must be wrapped in `db.Database.CreateExecutionStrategy().ExecuteAsync(...)`
   because the Aspire EF integration enables retry-on-failure.
+- Permissions: `Auth/Permissions.cs` mirrors the Auth0 API permissions (`infra/auth0` `api_permissions`);
+  each is a policy of the same name — `.RequireAuthorization(Permissions.ReadPhotos)`. Add new ones
+  in both places.
+- External services go behind an interface (e.g. `IPhotoStorage` for Cloudinary) so tests use a fake
+  (`FakePhotoStorage`, swapped per test with `ApiFactory.WithStorage`).
 - Auth is on by default (fallback policy requires an authenticated user). Anonymous endpoints must
   call `.AllowAnonymous()` explicitly. Get the caller's id with `User.GetUserId()` (Auth0 `sub`).
   Scope data to the owner in the query, not after loading.
 - Never put connection strings or secrets in `appsettings*.json`. Local: user secrets on the
-  AppHost. Deployed: environment variables (`ConnectionStrings__npdb`, `Auth0__Domain`, `Auth0__Audience`).
+  AppHost. Deployed: environment variables (`ConnectionStrings__npdb`, `Auth0__Domain`, `Auth0__Audience`,
+  `Cloudinary__ApiKey`, `Cloudinary__ApiSecret`).
+- Photo capture times come from EXIF offset or GPS UTC; never interpret EXIF local time in the
+  server's time zone. Delivery URLs are derived from the Cloudinary public ID, not stored.
 - Never edit a migration that has been applied to Neon; add a new one.
 - `/health` checks the database; `/alive` does not. Platform liveness probes must use `/alive` so
   they don't keep Neon's scale-to-zero compute awake.
@@ -93,5 +103,6 @@ automatically on startup in Development only.
 - `docs/auth0-terraform.md` — SPA ↔ API wiring checklist, Terraform bootstrap/import/workflow
 - `docs/health-checks.md` — endpoints and probe configuration
 - `docs/deployment.md` — Cloud Run (recommended) and alternatives
+- `docs/photos.md` — Photo model, id strategy, upload flow, EXIF dates, finding locations
 - `docs/postman.md` — local testing with Postman
 - `docs/testing.md` — test approach, coverage, CI, GitHub settings

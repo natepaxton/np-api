@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.Protocols;
 using Microsoft.IdentityModel.Protocols.OpenIdConnect;
+using NpApi.Api.Features.Photos.Storage;
 using Testcontainers.PostgreSql;
 
 [assembly: AssemblyFixture(typeof(NpApi.Api.Tests.Infrastructure.ApiFactory))]
@@ -18,9 +19,21 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
 {
     private readonly PostgreSqlContainer _database = new PostgreSqlBuilder("postgres:18").Build();
 
+    public const string CloudName = "test-cloud";
+
     public string ConnectionString => _database.GetConnectionString();
 
-    public async ValueTask InitializeAsync() => await _database.StartAsync();
+    // Replaces Cloudinary for the shared app instance. Tests needing failures use WithStorage().
+    public FakePhotoStorage Storage { get; } = new();
+
+    public async ValueTask InitializeAsync()
+    {
+        await _database.StartAsync();
+
+        // Start the app now so its startup migrations finish before any test runs. Otherwise extra
+        // instances from WithStorage() can race it and both try to create the same tables.
+        using var _ = CreateClient();
+    }
 
     public override async ValueTask DisposeAsync()
     {
@@ -42,8 +55,12 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
         builder.UseSetting("ConnectionStrings:npdb", ConnectionString);
         builder.UseSetting("Auth0:Domain", TestAuth.Domain);
         builder.UseSetting("Auth0:Audience", TestAuth.Audience);
+        builder.UseSetting("Cloudinary:CloudName", CloudName);
+        builder.UseSetting("Cloudinary:ApiKey", "test-key");
+        builder.UseSetting("Cloudinary:ApiSecret", "test-secret");
 
         builder.ConfigureTestServices(services =>
+        {
             services.PostConfigure<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme, options =>
             {
                 // Validate against the test issuer and key instead of downloading Auth0's metadata.
@@ -52,6 +69,21 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
 
                 options.Configuration = configuration;
                 options.ConfigurationManager = new StaticConfigurationManager<OpenIdConnectConfiguration>(configuration);
-            }));
+            });
+
+            services.AddSingleton<IPhotoStorage>(Storage);
+        });
+    }
+
+    // A second app instance (same database) whose photo storage is the given fake.
+    public WebApplicationFactory<Program> WithStorage(FakePhotoStorage storage) =>
+        WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
+            services.AddSingleton<IPhotoStorage>(storage)));
+
+    public static HttpClient Authorize(HttpClient client, string userId, params string[] permissions)
+    {
+        client.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue("Bearer", TestAuth.CreateToken(userId, permissions));
+        return client;
     }
 }

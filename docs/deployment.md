@@ -8,6 +8,7 @@ config comes from environment variables:
 | `ConnectionStrings__npdb` | Neon **pooled** connection string (from a secret) |
 | `Auth0__Domain` | `your-tenant.us.auth0.com` |
 | `Auth0__Audience` | API identifier |
+| `Cloudinary__ApiKey`, `Cloudinary__ApiSecret` | Cloudinary API credentials (secrets) |
 | `Cors__AllowedOrigins__0`, `__1`, ... | Frontend origins |
 
 `ASPNETCORE_ENVIRONMENT` defaults to `Production` in the container. OpenAPI is off, migrations are
