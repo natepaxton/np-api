@@ -11,10 +11,13 @@ using NpApi.Api.Features.Photos.Storage;
 namespace NpApi.Api.Features.Photos;
 
 // Field names match np-web's yellowstone photos.json so the frontend can switch to the API as-is.
+// cameraOwner is the person's display name (as in photos.json); cameraOwnerId identifies them.
+// Load photos with .Include(p => p.CameraOwner) before mapping.
 public sealed record PhotoResponse(
     Guid Id,
     string Filename,
-    string CameraOwner,
+    Guid? CameraOwnerId,
+    string? CameraOwner,
     double? Lat,
     double? Lng,
     LocationSource? LocationSource,
@@ -31,7 +34,8 @@ public sealed record PhotoResponse(
     public static PhotoResponse From(Photo photo, string cloudName) => new(
         photo.Id,
         photo.Filename,
-        photo.CameraOwner,
+        photo.CameraOwnerId,
+        photo.CameraOwner?.DisplayName,
         photo.Latitude,
         photo.Longitude,
         photo.LocationSource,
@@ -50,7 +54,7 @@ public sealed record PhotoResponse(
 public sealed class UploadPhotoForm
 {
     public IFormFile? File { get; init; }
-    public string? CameraOwner { get; init; }
+    public Guid? CameraOwnerId { get; init; }
     public string? DateCategory { get; init; }
     public double? Lat { get; init; }
     public double? Lng { get; init; }
@@ -94,6 +98,7 @@ public static class PhotoEndpoints
         photos.MapGet("/", async (AppDbContext db, IOptions<CloudinaryOptions> cloudinary, CancellationToken ct) =>
         {
             var rows = await db.Photos.AsNoTracking()
+                .Include(p => p.CameraOwner)
                 .OrderBy(p => p.DateTaken == null)
                 .ThenBy(p => p.DateTaken)
                 .ThenBy(p => p.UploadedAt)
@@ -105,7 +110,9 @@ public static class PhotoEndpoints
         photos.MapGet("/{id:guid}", async Task<Results<Ok<PhotoResponse>, NotFound>> (
             Guid id, AppDbContext db, IOptions<CloudinaryOptions> cloudinary, CancellationToken ct) =>
         {
-            var photo = await db.Photos.AsNoTracking().SingleOrDefaultAsync(p => p.Id == id, ct);
+            var photo = await db.Photos.AsNoTracking()
+                .Include(p => p.CameraOwner)
+                .SingleOrDefaultAsync(p => p.Id == id, ct);
 
             return photo is null
                 ? TypedResults.NotFound()
@@ -133,8 +140,8 @@ public static class PhotoEndpoints
         var command = new UploadPhotoCommand(
             Stream.Null,
             form.File?.FileName ?? "",
-            form.CameraOwner ?? "",
             http.User.GetUserId(),
+            form.CameraOwnerId,
             form.DateCategory,
             form.Lat,
             form.Lng,

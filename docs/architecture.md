@@ -128,11 +128,11 @@ var counts = await connection.QueryAsync<TagCount>(
     """
     select tag, count(*) as photo_count
     from photos, unnest(tags) as tag
-    where camera_owner = @owner
+    where camera_owner_id = @ownerId
     group by tag
     order by photo_count desc
     """,
-    new { owner });   // parameters are always sent as real parameters, never concatenated
+    new { ownerId });   // parameters are always sent as real parameters, never concatenated
 ```
 
 ### How they're combined here

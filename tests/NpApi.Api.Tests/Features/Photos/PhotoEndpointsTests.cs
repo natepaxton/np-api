@@ -28,7 +28,7 @@ public class PhotoEndpointsTests(ApiFactory factory)
         byte[]? image,
         string fileName = "PXL_20260824_031151688.NIGHT.jpg",
         string contentType = "image/jpeg",
-        string? cameraOwner = "Laura",
+        Guid? cameraOwnerId = null,
         params (string Name, string Value)[] fields)
     {
         var form = new MultipartFormDataContent();
@@ -38,9 +38,9 @@ public class PhotoEndpointsTests(ApiFactory factory)
             file.Headers.ContentType = new MediaTypeHeaderValue(contentType);
             form.Add(file, "file", fileName);
         }
-        if (cameraOwner is not null)
+        if (cameraOwnerId is not null)
         {
-            form.Add(new StringContent(cameraOwner), "cameraOwner");
+            form.Add(new StringContent(cameraOwnerId.Value.ToString()), "cameraOwnerId");
         }
         foreach (var (name, value) in fields)
         {
@@ -77,14 +77,16 @@ public class PhotoEndpointsTests(ApiFactory factory)
     public async Task Upload_stores_image_and_saves_exif_date_and_location()
     {
         var image = PixelPhoto();
+        var laura = await factory.CreatePersonAsync("Laura");
 
         var response = await Writer().PostAsync("/api/v1/photos",
-            Form(image, fields: ("dateCategory", "trip-out")), Ct);
+            Form(image, cameraOwnerId: laura.Id, fields: ("dateCategory", "trip-out")), Ct);
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         var photo = await ReadPhotoAsync(response);
 
         Assert.Equal("PXL_20260824_031151688.NIGHT.jpg", photo.Filename);
+        Assert.Equal(laura.Id, photo.CameraOwnerId);
         Assert.Equal("Laura", photo.CameraOwner);
         Assert.Equal("trip-out", photo.DateCategory);
         Assert.Equal(UtcTaken, photo.DateTaken);
@@ -132,12 +134,11 @@ public class PhotoEndpointsTests(ApiFactory factory)
 
     public static TheoryData<string, Func<MultipartFormDataContent>> InvalidUploads => new()
     {
-        { "File", () => Form(image: null) },
+        { "File", () => Form(image: null, fields: ("dateCategory", "trip-out")) },
         { "File", () => Form([]) },
         { "File", () => Form(new byte[PhotoEndpoints.MaxUploadBytes + 1]) },
         { "File", () => Form(PixelPhoto(), fileName: "notes.pdf", contentType: "application/pdf") },
-        { "CameraOwner", () => Form(PixelPhoto(), cameraOwner: null) },
-        { "CameraOwner", () => Form(PixelPhoto(), cameraOwner: new string('x', 101)) },
+        { "CameraOwnerId", () => Form(PixelPhoto(), cameraOwnerId: Guid.CreateVersion7()) },
         { "DateCategory", () => Form(PixelPhoto(), fields: ("dateCategory", new string('x', 51))) },
         { "Lat", () => Form(PixelPhoto(), fields: ("lat", "44.46")) },
         { "Lat", () => Form(PixelPhoto(), fields: [("lat", "91"), ("lng", "0")]) },
@@ -160,15 +161,34 @@ public class PhotoEndpointsTests(ApiFactory factory)
         Assert.Empty(storage.Uploaded);
     }
 
+    // Unreadable input is the client's fault: 400, never a 500.
+    [Fact]
+    public async Task Malformed_multipart_body_is_a_bad_request()
+    {
+        // An empty MultipartFormDataContent serializes a section with no headers, which isn't valid.
+        var response = await Writer().PostAsync("/api/v1/photos", new MultipartFormDataContent(), Ct);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Malformed_camera_owner_id_is_a_bad_request()
+    {
+        var response = await Writer().PostAsync("/api/v1/photos",
+            Form(PixelPhoto(), fields: ("cameraOwnerId", "not-a-guid")), Ct);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
     [Fact]
     public async Task File_and_field_errors_are_reported_together()
     {
         var response = await Writer().PostAsync("/api/v1/photos",
-            Form(image: null, cameraOwner: null, fields: ("lat", "44.46")), Ct);
+            Form(image: null, fields: [("lat", "44.46"), ("dateCategory", new string('x', 51))]), Ct);
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         var errors = (await response.Content.ReadFromJsonAsync<JsonElement>(Ct)).GetProperty("errors");
-        Assert.Equal(["CameraOwner", "File", "Lat"], errors.EnumerateObject().Select(e => e.Name).Order());
+        Assert.Equal(["DateCategory", "File", "Lat"], errors.EnumerateObject().Select(e => e.Name).Order());
     }
 
     [Theory]
@@ -176,15 +196,15 @@ public class PhotoEndpointsTests(ApiFactory factory)
     [InlineData(FakePhotoStorage.Failure.Unavailable, HttpStatusCode.BadGateway)]
     public async Task Storage_failure_is_reported_and_nothing_is_saved(FakePhotoStorage.Failure failure, HttpStatusCode expected)
     {
-        var uploader = TestAuth.NewUserId();
+        var owner = await factory.CreatePersonAsync();
         await using var app = factory.WithStorage(new FakePhotoStorage { FailWith = failure });
-        var client = ApiFactory.Authorize(app.CreateClient(), uploader, Permissions.ReadPhotos, Permissions.WritePhotos);
+        var client = ApiFactory.Authorize(app.CreateClient(), TestAuth.NewUserId(), Permissions.ReadPhotos, Permissions.WritePhotos);
 
-        var response = await client.PostAsync("/api/v1/photos", Form(PixelPhoto(), cameraOwner: uploader), Ct);
+        var response = await client.PostAsync("/api/v1/photos", Form(PixelPhoto(), cameraOwnerId: owner.Id), Ct);
 
         Assert.Equal(expected, response.StatusCode);
         var photos = await client.GetFromJsonAsync<PhotoResponse[]>("/api/v1/photos", Json, Ct);
-        Assert.DoesNotContain(photos!, p => p.CameraOwner == uploader);
+        Assert.DoesNotContain(photos!, p => p.CameraOwnerId == owner.Id);
     }
 
     [Fact]
@@ -218,10 +238,10 @@ public class PhotoEndpointsTests(ApiFactory factory)
     [Fact]
     public async Task List_is_ordered_by_date_taken_with_undated_photos_last()
     {
-        var owner = $"owner-{Guid.NewGuid():N}";
+        var owner = (await factory.CreatePersonAsync()).Id;
         var client = Writer();
         async Task<Guid> Upload(byte[] image) =>
-            (await ReadPhotoAsync(await client.PostAsync("/api/v1/photos", Form(image, cameraOwner: owner), Ct))).Id;
+            (await ReadPhotoAsync(await client.PostAsync("/api/v1/photos", Form(image, cameraOwnerId: owner), Ct))).Id;
 
         var undated = await Upload(TestImages.Jpeg());
         var later = await Upload(TestImages.Jpeg(dateTimeOriginal: LocalTaken.AddDays(2), offsetTimeOriginal: "+00:00"));
@@ -229,7 +249,7 @@ public class PhotoEndpointsTests(ApiFactory factory)
 
         var photos = await client.GetFromJsonAsync<PhotoResponse[]>("/api/v1/photos", Json, Ct);
 
-        Assert.Equal([earlier, later, undated], photos!.Where(p => p.CameraOwner == owner).Select(p => p.Id));
+        Assert.Equal([earlier, later, undated], photos!.Where(p => p.CameraOwnerId == owner).Select(p => p.Id));
     }
 
     [Fact]

@@ -30,8 +30,8 @@ public class UploadPhotoHandlerTests(ApiFactory factory)
         return (new UploadPhotoHandler(db, storage, options, NullLogger<UploadPhotoHandler>.Instance), db, scope);
     }
 
-    private static UploadPhotoCommand Command(Stream content, string cameraOwner = "Laura") =>
-        new(content, "PXL_1.jpg", cameraOwner, TestAuth.NewUserId());
+    private static UploadPhotoCommand Command(Stream content, Guid? cameraOwnerId = null) =>
+        new(content, "PXL_1.jpg", TestAuth.NewUserId(), cameraOwnerId);
 
     [Fact]
     public async Task Reads_metadata_and_uploads_from_a_forward_only_stream_without_closing_it()
@@ -54,14 +54,15 @@ public class UploadPhotoHandlerTests(ApiFactory factory)
     [Fact]
     public async Task Normalizes_fields_and_saves_the_row()
     {
+        var travis = await factory.CreatePersonAsync("Travis");
         var (handler, db, scope) = Create(new FakePhotoStorage());
         using var _ = scope;
-        var command = Command(new MemoryStream(TestImages.Jpeg()), cameraOwner: "  Travis  ") with { DateCategory = "   " };
+        var command = Command(new MemoryStream(TestImages.Jpeg()), travis.Id) with { DateCategory = "   " };
 
         var photo = Assert.IsType<UploadPhotoResult.Uploaded>(await handler.HandleAsync(command, Ct)).Photo;
 
         var saved = await db.Photos.AsNoTracking().SingleAsync(p => p.Id == photo.Id, Ct);
-        Assert.Equal("Travis", saved.CameraOwner);
+        Assert.Equal(travis.Id, saved.CameraOwnerId);
         Assert.Null(saved.DateCategory);
         Assert.Equal(command.UploadedBy, saved.UploadedBy);
         Assert.Null(saved.LocationSource);
@@ -73,12 +74,26 @@ public class UploadPhotoHandlerTests(ApiFactory factory)
         var storage = new FakePhotoStorage();
         var (handler, _, scope) = Create(storage);
         using var _ = scope;
-        var command = Command(new MemoryStream(TestImages.Jpeg()), cameraOwner: " ") with { Lat = 95 };
+        var command = Command(new MemoryStream(TestImages.Jpeg())) with { Lat = 95, DateCategory = new string('x', 51) };
 
         var result = await handler.HandleAsync(command, Ct);
 
         var errors = Assert.IsType<UploadPhotoResult.Invalid>(result).Errors;
-        Assert.Equal(["CameraOwner", "Lat"], errors.Keys.Order());
+        Assert.Equal(["DateCategory", "Lat"], errors.Keys.Order());
+        Assert.Empty(storage.Uploaded);
+    }
+
+    [Fact]
+    public async Task Unknown_camera_owner_is_rejected_before_anything_is_stored()
+    {
+        var storage = new FakePhotoStorage();
+        var (handler, _, scope) = Create(storage);
+        using var _ = scope;
+
+        var result = await handler.HandleAsync(Command(new MemoryStream(TestImages.Jpeg()), Guid.CreateVersion7()), Ct);
+
+        var errors = Assert.IsType<UploadPhotoResult.Invalid>(result).Errors;
+        Assert.Equal(["CameraOwnerId"], errors.Keys);
         Assert.Empty(storage.Uploaded);
     }
 
@@ -89,11 +104,11 @@ public class UploadPhotoHandlerTests(ApiFactory factory)
     {
         var (handler, db, scope) = Create(new FakePhotoStorage { FailWith = failure });
         using var _ = scope;
-        var owner = $"owner-{Guid.NewGuid():N}";
+        var owner = await factory.CreatePersonAsync();
 
-        var result = await handler.HandleAsync(Command(new MemoryStream(TestImages.Jpeg()), owner), Ct);
+        var result = await handler.HandleAsync(Command(new MemoryStream(TestImages.Jpeg()), owner.Id), Ct);
 
         Assert.IsType(expected, result);
-        Assert.False(await db.Photos.AnyAsync(p => p.CameraOwner == owner, Ct));
+        Assert.False(await db.Photos.AnyAsync(p => p.CameraOwnerId == owner.Id, Ct));
     }
 }

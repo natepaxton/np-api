@@ -37,6 +37,8 @@ https://localhost:7223:
 | `GET /api/v1/me` | bearer token | Echoes your Auth0 user id and permissions |
 | `POST /api/v1/photos` (multipart) | `write:photos` | Upload to Cloudinary; reads EXIF date and GPS |
 | `GET /api/v1/photos`, `GET /api/v1/photos/{id}` | `read:photos` | Photos with thumbnail/medium/full URLs |
+| `GET /api/v1/people`, `GET /api/v1/people/{id}` | `read:people` | People (photo subjects, camera owners) |
+| `POST`/`PUT`/`DELETE /api/v1/people[/{id}]` | `write:people` | Manage people; delete is 409 while they own photos |
 
 ## Documentation
 
@@ -47,5 +49,6 @@ https://localhost:7223:
 - [Health checks](docs/health-checks.md)
 - [Deployment](docs/deployment.md)
 - [Photos: model, upload, locations](docs/photos.md)
+- [People: model, tagging link, camera owners](docs/people.md)
 - [Testing with Postman](docs/postman.md)
 - [Automated tests, coverage and CI](docs/testing.md)
