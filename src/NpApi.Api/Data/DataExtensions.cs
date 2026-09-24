@@ -14,7 +14,8 @@ public static class DataExtensions
         builder.AddNpgsqlDbContext<AppDbContext>(ConnectionName,
             configureDbContextOptions: options => options.UseSnakeCaseNamingConvention());
 
-        // Map snake_case columns (created_at) to PascalCase properties (CreatedAt).
+        // Dapper (for SQL-first read queries): map snake_case columns (uploaded_at) to PascalCase
+        // properties (UploadedAt). See docs/architecture.md before adding a Dapper query.
         DefaultTypeMap.MatchNamesWithUnderscores = true;
 
         return builder;

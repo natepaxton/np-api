@@ -35,7 +35,6 @@ https://localhost:7223:
 | `GET /health` | anonymous | Readiness (includes database) |
 | `GET /openapi/v1.json` | anonymous, Development only | OpenAPI document for Postman |
 | `GET /api/v1/me` | bearer token | Echoes your Auth0 user id and permissions |
-| `GET/POST /api/v1/notes`, `GET /api/v1/notes/{id}` | bearer token | Sample feature (EF writes, Dapper reads) |
 | `POST /api/v1/photos` (multipart) | `write:photos` | Upload to Cloudinary; reads EXIF date and GPS |
 | `GET /api/v1/photos`, `GET /api/v1/photos/{id}` | `read:photos` | Photos with thumbnail/medium/full URLs |
 

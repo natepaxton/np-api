@@ -2,7 +2,6 @@ using System.Text.Json.Serialization;
 using NpApi.Api.Auth;
 using NpApi.Api.Data;
 using NpApi.Api.Features.Me;
-using NpApi.Api.Features.Notes;
 using NpApi.Api.Features.Photos;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -26,8 +25,6 @@ builder.Services.AddCors(options => options.AddDefaultPolicy(policy => policy
     .AllowAnyMethod()));
 builder.Services.AddOpenApi();
 
-builder.Services.AddNotes();
-
 var app = builder.Build();
 
 app.UseExceptionHandler();
@@ -48,7 +45,6 @@ app.MapDefaultEndpoints();
 
 var api = app.MapGroup("/api/v1");
 api.MapMe();
-api.MapNotes();
 api.MapPhotos();
 
 await app.ApplyMigrationsInDevelopmentAsync();

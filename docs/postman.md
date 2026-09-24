@@ -70,8 +70,6 @@ will be `<client-id>@clients`.
 | `GET {{baseUrl}}/health` (No Auth) | 200, includes `AppDbContext` |
 | `GET {{baseUrl}}/api/v1/me` without token | 401 |
 | `GET {{baseUrl}}/api/v1/me` with token | 200 with your `userId` and `permissions` |
-| `POST {{baseUrl}}/api/v1/notes` body `{"title":"hi"}` | 201 with `Location` header |
-| `GET {{baseUrl}}/api/v1/notes` | 200, list including the note |
 | `POST {{baseUrl}}/api/v1/photos`, Body → form-data: `file` (type **File**, a JPEG), `cameraOwner` = `Nate` | 201 with `thumbnail`/`medium`/`full` URLs, and `lat`/`lng`/`dateTaken` from the photo's EXIF. Needs `write:photos`. |
 | `GET {{baseUrl}}/api/v1/photos` | 200, photos ordered by `dateTaken`. Needs `read:photos`. |
 
