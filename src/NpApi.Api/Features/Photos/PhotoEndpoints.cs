@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using CloudinaryDotNet;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
@@ -81,6 +82,7 @@ public static class PhotoEndpoints
             return cloudinary;
         });
         builder.Services.AddSingleton<IPhotoStorage, CloudinaryPhotoStorage>();
+        builder.Services.AddScoped<UploadPhotoHandler>();
 
         return builder;
     }
@@ -120,142 +122,60 @@ public static class PhotoEndpoints
         return app;
     }
 
+    // HTTP only: check the uploaded file, hand the rest to UploadPhotoHandler, map its result.
     private static async Task<Results<CreatedAtRoute<PhotoResponse>, ValidationProblem, ProblemHttpResult>> UploadAsync(
         [FromForm] UploadPhotoForm form,
         HttpContext http,
-        AppDbContext db,
-        IPhotoStorage storage,
+        UploadPhotoHandler handler,
         IOptions<CloudinaryOptions> cloudinary,
-        ILoggerFactory loggerFactory,
         CancellationToken ct)
     {
-        var errors = Validate(form);
+        var command = new UploadPhotoCommand(
+            Stream.Null,
+            form.File?.FileName ?? "",
+            form.CameraOwner ?? "",
+            http.User.GetUserId(),
+            form.DateCategory,
+            form.Lat,
+            form.Lng,
+            form.DateTaken);
+
+        var errors = UploadPhotoHandler.Validate(command);
+        if (ValidateFile(form.File) is { } fileError)
+        {
+            errors[nameof(form.File)] = [fileError];
+        }
         if (errors.Count > 0)
         {
             return TypedResults.ValidationProblem(errors);
         }
 
-        var file = form.File!;
-        await using var content = new MemoryStream((int)file.Length);
-        await file.CopyToAsync(content, ct);
-
-        content.Position = 0;
-        var metadata = PhotoMetadataReader.Read(content);
-
-        var id = Guid.CreateVersion7();
-        var publicId = $"{cloudinary.Value.Folder.TrimEnd('/')}/{id}";
-
-        StoredPhoto stored;
-        try
+        await using var content = form.File!.OpenReadStream();
+        return await handler.HandleAsync(command with { Content = content }, ct) switch
         {
-            content.Position = 0;
-            stored = await storage.UploadAsync(content, file.FileName, publicId, ct);
-        }
-        catch (PhotoStorageException ex) when (ex.IsInvalidImage)
-        {
-            return TypedResults.ValidationProblem(new Dictionary<string, string[]>
-            {
-                [nameof(UploadPhotoForm.File)] = ["The file is not an image the photo host can process."],
-            });
-        }
-        catch (PhotoStorageException)
-        {
-            return TypedResults.Problem(
-                title: "Photo storage unavailable",
-                detail: "The image could not be uploaded. Try again later.",
-                statusCode: StatusCodes.Status502BadGateway);
-        }
-
-        var photo = new Photo
-        {
-            Id = id,
-            CloudinaryPublicId = stored.PublicId,
-            Url = stored.Url,
-            Filename = Path.GetFileName(file.FileName),
-            CameraOwner = form.CameraOwner!.Trim(),
-            DateCategory = string.IsNullOrWhiteSpace(form.DateCategory) ? null : form.DateCategory.Trim(),
-            DateTaken = (form.DateTaken ?? metadata.DateTaken)?.ToUniversalTime(),
-            Width = stored.Width,
-            Height = stored.Height,
-            UploadedBy = http.User.GetUserId(),
+            UploadPhotoResult.Uploaded(var photo) =>
+                TypedResults.CreatedAtRoute(PhotoResponse.From(photo, cloudinary.Value.CloudName), "GetPhoto", new { id = photo.Id }),
+            UploadPhotoResult.Invalid(var fieldErrors) =>
+                TypedResults.ValidationProblem(fieldErrors),
+            UploadPhotoResult.InvalidImage =>
+                TypedResults.ValidationProblem(new Dictionary<string, string[]>
+                {
+                    [nameof(form.File)] = ["The file is not an image the photo host can process."],
+                }),
+            UploadPhotoResult.StorageUnavailable =>
+                TypedResults.Problem(
+                    title: "Photo storage unavailable",
+                    detail: "The image could not be uploaded. Try again later.",
+                    statusCode: StatusCodes.Status502BadGateway),
+            var other => throw new UnreachableException($"Unhandled upload result {other}."),
         };
-
-        if (form.Lat is { } lat && form.Lng is { } lng)
-        {
-            photo.SetLocation(lat, lng, LocationSource.Manual);
-        }
-        else if (metadata.Latitude is { } exifLat && metadata.Longitude is { } exifLng)
-        {
-            photo.SetLocation(exifLat, exifLng, LocationSource.Exif);
-        }
-
-        db.Photos.Add(photo);
-        try
-        {
-            await db.SaveChangesAsync(ct);
-        }
-        catch (Exception)
-        {
-            // Don't leave an orphaned image in Cloudinary when the row can't be saved.
-            await TryDeleteAsync(storage, stored.PublicId, loggerFactory.CreateLogger(typeof(PhotoEndpoints)));
-            throw;
-        }
-
-        return TypedResults.CreatedAtRoute(PhotoResponse.From(photo, cloudinary.Value.CloudName), "GetPhoto", new { id = photo.Id });
     }
 
-    private static Dictionary<string, string[]> Validate(UploadPhotoForm form)
+    private static string? ValidateFile(IFormFile? file) => file switch
     {
-        var errors = new Dictionary<string, string[]>();
-
-        if (form.File is null || form.File.Length == 0)
-        {
-            errors[nameof(form.File)] = ["An image file is required."];
-        }
-        else if (form.File.Length > MaxUploadBytes)
-        {
-            errors[nameof(form.File)] = [$"The image must be {MaxUploadBytes / (1024 * 1024)} MB or smaller."];
-        }
-        else if (!AllowedContentTypes.Contains(form.File.ContentType))
-        {
-            errors[nameof(form.File)] = ["Only JPEG, PNG, WebP and HEIC images are supported."];
-        }
-
-        if (string.IsNullOrWhiteSpace(form.CameraOwner))
-        {
-            errors[nameof(form.CameraOwner)] = ["Camera owner is required."];
-        }
-        else if (form.CameraOwner.Trim().Length > 100)
-        {
-            errors[nameof(form.CameraOwner)] = ["Camera owner must be 100 characters or fewer."];
-        }
-
-        if (form.DateCategory?.Trim().Length > 50)
-        {
-            errors[nameof(form.DateCategory)] = ["Date category must be 50 characters or fewer."];
-        }
-
-        if (form.Lat.HasValue != form.Lng.HasValue)
-        {
-            errors[nameof(form.Lat)] = ["Provide both lat and lng, or neither."];
-        }
-        else if (form.Lat is < -90 or > 90 || form.Lng is < -180 or > 180)
-        {
-            errors[nameof(form.Lat)] = ["Lat must be between -90 and 90 and lng between -180 and 180."];
-        }
-
-        return errors;
-    }
-
-    private static async Task TryDeleteAsync(IPhotoStorage storage, string publicId, ILogger logger)
-    {
-        try
-        {
-            await storage.DeleteAsync(publicId, CancellationToken.None);
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Photo {PublicId} was uploaded but not saved, and could not be deleted from storage", publicId);
-        }
-    }
+        null or { Length: 0 } => "An image file is required.",
+        { Length: > MaxUploadBytes } => $"The image must be {MaxUploadBytes / (1024 * 1024)} MB or smaller.",
+        _ when !AllowedContentTypes.Contains(file.ContentType) => "Only JPEG, PNG, WebP and HEIC images are supported.",
+        _ => null,
+    };
 }

@@ -160,6 +160,17 @@ public class PhotoEndpointsTests(ApiFactory factory)
         Assert.Empty(storage.Uploaded);
     }
 
+    [Fact]
+    public async Task File_and_field_errors_are_reported_together()
+    {
+        var response = await Writer().PostAsync("/api/v1/photos",
+            Form(image: null, cameraOwner: null, fields: ("lat", "44.46")), Ct);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var errors = (await response.Content.ReadFromJsonAsync<JsonElement>(Ct)).GetProperty("errors");
+        Assert.Equal(["CameraOwner", "File", "Lat"], errors.EnumerateObject().Select(e => e.Name).Order());
+    }
+
     [Theory]
     [InlineData(FakePhotoStorage.Failure.InvalidImage, HttpStatusCode.BadRequest)]
     [InlineData(FakePhotoStorage.Failure.Unavailable, HttpStatusCode.BadGateway)]

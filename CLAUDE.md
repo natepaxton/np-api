@@ -43,7 +43,7 @@ automatically on startup in Development only.
   - `Program.cs` — composition root; should read as a list of `AddX()` / `MapX()` calls.
   - `Data/` — `AppDbContext`, migrations, data DI registration.
   - `Auth/` — Auth0 JWT setup and claim helpers.
-  - `Features/<Feature>/` — entity + EF config, Dapper queries, endpoints, and the feature's
+  - `Features/<Feature>/` — entity + EF config, use-case handlers, queries, endpoints, and the feature's
     `AddX(IServiceCollection)` / `MapX(IEndpointRouteBuilder)` extensions.
 
 ## Conventions
@@ -53,6 +53,11 @@ automatically on startup in Development only.
   health endpoints stay at the root.
 - CORS: every frontend origin must be in `Cors:AllowedOrigins` (dev: 4300 sandbox, 4301 yellowstone, 4302 roadie).
 - Endpoints use `TypedResults` and `Results<...>` return types so OpenAPI is accurate.
+- Endpoints do HTTP work only: binding, authorization, upload/transport checks, and mapping results to
+  status codes. Once an endpoint does more than one thing, move the logic into a per-use-case handler
+  in the feature folder (`<Verb><Noun>Handler`: a command record in, a result record out, no HTTP types;
+  see `UploadPhotoHandler`). One class per use case, not a catch-all `<Feature>Service`. Simple reads
+  can stay inline until they grow (filters, paging), then move to a `<Feature>Queries` class.
 - DI: inject `AppDbContext` directly; do not add repository/unit-of-work wrappers around EF. Add an
   interface only for a real seam (external service, multiple implementations). Services that use
   `AppDbContext` must be scoped. Use `TimeProvider` rather than `DateTime.UtcNow`

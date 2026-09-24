@@ -85,6 +85,33 @@ up retries/timeouts/circuit breaker from ServiceDefaults automatically.
 **7. Time.** Inject `TimeProvider` (register `TimeProvider.System` as a singleton when first needed)
 instead of calling `DateTime.UtcNow`, so tests can control time.
 
+## Endpoints and handlers
+
+Endpoints stay thin. They handle **HTTP**: binding the request, requiring permissions, checking the
+upload itself (presence, size, content type), and turning an outcome into a status code. The
+**work** lives in a handler class per use case in the feature folder:
+
+```
+Features/Photos/
+  PhotoEndpoints.cs       routes, form checks, result → 201/400/502
+  UploadPhotoHandler.cs   UploadPhotoCommand in → UploadPhotoResult out
+```
+
+- **Command in, result out, no HTTP types.** `UploadPhotoCommand` carries a `Stream`, not an
+  `IFormFile`, so the same handler can serve an import script or a background job.
+- **Expected outcomes are results, not exceptions** (`Uploaded`, `Invalid`, `InvalidImage`,
+  `StorageUnavailable`). The endpoint maps each one to a response with a `switch`. Genuine failures
+  (the database is down) still throw and become a 500.
+- **One class per use case** (`UploadPhotoHandler`, later `TagPhotoHandler`), not one
+  `PhotoService` that collects every operation and every dependency.
+- **Handlers validate their own input,** so every caller is protected. Endpoints may call the same
+  rules first (`UploadPhotoHandler.Validate`) to report all errors in one response.
+- **Trivial reads stay inline** in the endpoint. Move them to a `PhotoQueries` class once they have
+  real logic (filters, paging, Dapper).
+
+No MediatR or similar: the endpoint calls the handler directly, which keeps it easy to navigate and
+debug. Register handlers as scoped (`AddScoped<UploadPhotoHandler>()`), since they use `AppDbContext`.
+
 ## EF Core and Dapper
 
 ### What Dapper is
