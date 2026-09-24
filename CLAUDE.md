@@ -71,7 +71,7 @@ automatically on startup in Development only.
   operation without a transaction.
 - Timestamps written by the app are truncated to microseconds (Postgres `timestamptz` precision) so
   the value a POST returns matches later reads; use `Timestamps.UtcNow()`.
-- Database naming is snake_case (EFCore.NamingConventions). Raw SQL uses snake_case: `uploaded_at`, `camera_owner`.
+- Database naming is snake_case (EFCore.NamingConventions). Raw SQL uses snake_case: `uploaded_at`, `camera_owner_id`.
 - Dapper row types are records with `init` properties, not positional records — constructor mapping
   fails on snake_case columns and on `timestamptz` (read as `DateTime`).
 - Manual transactions must be wrapped in `db.Database.CreateExecutionStrategy().ExecuteAsync(...)`
@@ -87,6 +87,8 @@ automatically on startup in Development only.
 - Never put connection strings or secrets in `appsettings*.json`. Local: user secrets on the
   AppHost. Deployed: environment variables (`ConnectionStrings__npdb`, `Auth0__Domain`, `Auth0__Audience`,
   `Cloudinary__ApiKey`, `Cloudinary__ApiSecret`).
+- People are referenced by id (`camera_owner_id`, `photo_people`), never by name, and are never stored
+  in `Photo.Tags`.
 - Photo capture times come from EXIF offset or GPS UTC; never interpret EXIF local time in the
   server's time zone. Delivery URLs are derived from the Cloudinary public ID, not stored.
 - Never edit a migration that has been applied to Neon; add a new one.
@@ -109,6 +111,7 @@ automatically on startup in Development only.
 - `docs/auth0-terraform.md` — SPA ↔ API wiring checklist, Terraform bootstrap/import/workflow
 - `docs/health-checks.md` — endpoints and probe configuration
 - `docs/deployment.md` — Cloud Run (recommended) and alternatives
+- `docs/people.md` — Person model, photo_people tagging link, camera owner, deletion rules
 - `docs/photos.md` — Photo model, id strategy, upload flow, EXIF dates, finding locations
 - `docs/postman.md` — local testing with Postman
 - `docs/testing.md` — test approach, coverage, CI, GitHub settings

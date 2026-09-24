@@ -2,6 +2,7 @@ using System.Text.Json.Serialization;
 using NpApi.Api.Auth;
 using NpApi.Api.Data;
 using NpApi.Api.Features.Me;
+using NpApi.Api.Features.People;
 using NpApi.Api.Features.Photos;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -27,7 +28,14 @@ builder.Services.AddOpenApi();
 
 var app = builder.Build();
 
-app.UseExceptionHandler();
+app.UseExceptionHandler(new ExceptionHandlerOptions
+{
+    // Malformed requests (unreadable form or JSON body, too large, bad route/form values) surface as
+    // BadHttpRequestException carrying 400/413. Keep that status instead of turning it into a 500.
+    StatusCodeSelector = exception => exception is BadHttpRequestException badRequest
+        ? badRequest.StatusCode
+        : StatusCodes.Status500InternalServerError,
+});
 app.UseStatusCodePages();
 
 if (app.Environment.IsDevelopment())
@@ -46,6 +54,7 @@ app.MapDefaultEndpoints();
 var api = app.MapGroup("/api/v1");
 api.MapMe();
 api.MapPhotos();
+api.MapPeople();
 
 await app.ApplyMigrationsInDevelopmentAsync();
 

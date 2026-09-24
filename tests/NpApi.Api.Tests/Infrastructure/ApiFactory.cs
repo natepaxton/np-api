@@ -6,6 +6,8 @@ using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.Protocols;
 using Microsoft.IdentityModel.Protocols.OpenIdConnect;
+using NpApi.Api.Data;
+using NpApi.Api.Features.People;
 using NpApi.Api.Features.Photos.Storage;
 using Testcontainers.PostgreSql;
 
@@ -79,6 +81,17 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
     public WebApplicationFactory<Program> WithStorage(FakePhotoStorage storage) =>
         WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
             services.AddSingleton<IPhotoStorage>(storage)));
+
+    // Inserts a person straight into the database (for tests that need one to exist).
+    public async Task<Person> CreatePersonAsync(string firstName = "Laura", string? lastName = null)
+    {
+        using var scope = Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var person = new Person { FirstName = firstName, LastName = lastName };
+        db.People.Add(person);
+        await db.SaveChangesAsync();
+        return person;
+    }
 
     public static HttpClient Authorize(HttpClient client, string userId, params string[] permissions)
     {

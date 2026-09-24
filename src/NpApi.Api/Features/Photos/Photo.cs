@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using NpApi.Api.Data;
+using NpApi.Api.Features.People;
 
 namespace NpApi.Api.Features.Photos;
 
@@ -18,7 +19,13 @@ public sealed class Photo
     public required string Url { get; init; }
 
     public required string Filename { get; init; }
-    public required string CameraOwner { get; set; }
+
+    // Whose camera took it (EXIF records the device, not who pressed the shutter). Null when unknown.
+    public Guid? CameraOwnerId { get; set; }
+    public Person? CameraOwner { get; set; }
+
+    // People appearing in the photo.
+    public List<PhotoPerson> TaggedPeople { get; } = [];
 
     public double? Latitude { get; private set; }
     public double? Longitude { get; private set; }
@@ -31,7 +38,7 @@ public sealed class Photo
     public int Width { get; init; }
     public int Height { get; init; }
 
-    // Auth0 user id ("sub") of the uploader; CameraOwner is whose camera took it.
+    // Auth0 user id ("sub") of the uploader, who isn't necessarily the camera owner.
     public required string UploadedBy { get; init; }
     public DateTimeOffset UploadedAt { get; init; } = Timestamps.UtcNow();
 
@@ -66,7 +73,11 @@ internal sealed class PhotoConfiguration : IEntityTypeConfiguration<Photo>
 
         builder.Property(p => p.Url).HasMaxLength(1024);
         builder.Property(p => p.Filename).HasMaxLength(255);
-        builder.Property(p => p.CameraOwner).HasMaxLength(100);
+        // A person can't be deleted while they own photos; reassign the photos first.
+        builder.HasOne(p => p.CameraOwner)
+            .WithMany()
+            .HasForeignKey(p => p.CameraOwnerId)
+            .OnDelete(DeleteBehavior.Restrict);
         builder.Property(p => p.DateCategory).HasMaxLength(50);
         builder.Property(p => p.UploadedBy).HasMaxLength(128);
         builder.Property(p => p.LocationSource).HasConversion<string>().HasMaxLength(20);

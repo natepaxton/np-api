@@ -11,7 +11,7 @@ and its tags. Source: `src/NpApi.Api/Features/Photos/`.
 | `CloudinaryPublicId` | `varchar(255)`, unique | e.g. `np-api/photos/0199…`. One asset maps to one row. |
 | `Url` | `varchar(1024)` | The `secure_url` Cloudinary returned for the original |
 | `Filename` | `varchar(255)` | Original file name, informational only |
-| `CameraOwner` | `varchar(100)` | Whose camera took it (not necessarily who uploaded it) |
+| `CameraOwnerId` | `uuid?` → `people.id` | Whose camera took it (not necessarily who uploaded it). See [people.md](people.md). |
 | `Latitude`, `Longitude` | `double?` | Both or neither, range-checked by the database |
 | `LocationSource` | `Exif` / `Inferred` / `Manual`, nullable | Set exactly when coordinates are set |
 | `DateTaken` | `timestamptz?` | A real instant, stored as UTC |
@@ -21,7 +21,7 @@ and its tags. Source: `src/NpApi.Api/Features/Photos/`.
 | `UploadedBy`, `UploadedAt` | Auth0 `sub`, `timestamptz` | Audit |
 
 The API response uses yellowstone's `photos.json` field names (`lat`, `lng`, `thumbnail`,
-`medium`, `full`). The size URLs are **built from the public ID on every read** instead of being
+`medium`, `full`, and `cameraOwner`, which is now the person's display name next to `cameraOwnerId`). The size URLs are **built from the public ID on every read** instead of being
 stored, so changing a size or format is a code change, not a data migration. `f_auto` lets
 Cloudinary serve WebP/AVIF/JPEG per browser, which also makes iPhone HEIC uploads viewable.
 
@@ -45,7 +45,7 @@ Requires the `write:photos` permission. `multipart/form-data`:
 | Field | Required | |
 | --- | --- | --- |
 | `file` | yes | JPEG, PNG, WebP or HEIC, max **10 MB** (Cloudinary free-plan image limit) |
-| `cameraOwner` | yes | |
+| `cameraOwnerId` | no | Id of an existing person. Unknown ids get 400. |
 | `dateCategory` | no | |
 | `lat` + `lng` | no | Overrides EXIF; saved as `LocationSource = Manual` |
 | `dateTaken` | no | ISO 8601 with offset; overrides EXIF |

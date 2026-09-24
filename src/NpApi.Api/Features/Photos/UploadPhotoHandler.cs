@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Options;
 using NpApi.Api.Data;
+using NpApi.Api.Features.People;
 using NpApi.Api.Features.Photos.Storage;
 
 namespace NpApi.Api.Features.Photos;
@@ -9,8 +10,8 @@ namespace NpApi.Api.Features.Photos;
 public sealed record UploadPhotoCommand(
     Stream Content,
     string FileName,
-    string CameraOwner,
     string UploadedBy,
+    Guid? CameraOwnerId = null,
     string? DateCategory = null,
     double? Lat = null,
     double? Lng = null,
@@ -48,6 +49,20 @@ public sealed class UploadPhotoHandler(
             return new UploadPhotoResult.Invalid(errors);
         }
 
+        // Checked before uploading, so an unknown person never leaves an orphaned image behind.
+        Person? cameraOwner = null;
+        if (command.CameraOwnerId is { } cameraOwnerId)
+        {
+            cameraOwner = await db.People.FindAsync([cameraOwnerId], cancellationToken);
+            if (cameraOwner is null)
+            {
+                return new UploadPhotoResult.Invalid(new Dictionary<string, string[]>
+                {
+                    [nameof(command.CameraOwnerId)] = ["No person with this id."],
+                });
+            }
+        }
+
         // Read twice (metadata, then upload), so work on our own seekable copy and leave the
         // caller's stream alone. Uploads are capped at 10 MB, so buffering in memory is fine.
         await using var content = await BufferAsync(command.Content, cancellationToken);
@@ -74,7 +89,8 @@ public sealed class UploadPhotoHandler(
             CloudinaryPublicId = stored.PublicId,
             Url = stored.Url,
             Filename = Path.GetFileName(command.FileName),
-            CameraOwner = command.CameraOwner.Trim(),
+            CameraOwnerId = cameraOwner?.Id,
+            CameraOwner = cameraOwner,
             DateCategory = string.IsNullOrWhiteSpace(command.DateCategory) ? null : command.DateCategory.Trim(),
             DateTaken = (command.DateTaken ?? metadata.DateTaken)?.ToUniversalTime(),
             Width = stored.Width,
@@ -111,15 +127,6 @@ public sealed class UploadPhotoHandler(
     public static Dictionary<string, string[]> Validate(UploadPhotoCommand command)
     {
         var errors = new Dictionary<string, string[]>();
-
-        if (string.IsNullOrWhiteSpace(command.CameraOwner))
-        {
-            errors[nameof(command.CameraOwner)] = ["Camera owner is required."];
-        }
-        else if (command.CameraOwner.Trim().Length > 100)
-        {
-            errors[nameof(command.CameraOwner)] = ["Camera owner must be 100 characters or fewer."];
-        }
 
         if (command.DateCategory?.Trim().Length > 50)
         {
