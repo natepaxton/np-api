@@ -1,0 +1,76 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    name: Build and test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+
+      - name: Restore tools
+        run: dotnet tool restore
+
+      - name: Build
+        run: dotnet build --configuration Release
+
+      # Integration tests start a throwaway Postgres container with Testcontainers; the hosted
+      # runner has Docker. No secrets needed: tests sign their own JWTs instead of calling Auth0.
+      - name: Test with coverage
+        run: >
+          dotnet test --no-build --configuration Release
+          --coverage --coverage-output-format cobertura --coverage-output coverage.cobertura.xml
+          --coverage-settings coverage.config --results-directory TestResults
+
+      - name: Coverage report
+        if: ${{ !cancelled() }}
+        run: >
+          dotnet reportgenerator -reports:"TestResults/**/*.cobertura.xml" -targetdir:coverage-report
+          -reporttypes:"MarkdownSummaryGithub;Html"
+
+      - name: Publish coverage summary
+        if: ${{ !cancelled() }}
+        run: cat coverage-report/SummaryGithub.md >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v7
+        if: ${{ !cancelled() }}
+        with:
+          name: coverage-report
+          path: coverage-report
+
+  terraform:
+    name: Terraform checks (Auth0)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: infra/auth0
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: hashicorp/setup-terraform@v4
+
+      # Syntax and formatting only. No -backend and no provider credentials, so it never touches
+      # the Auth0 tenant; plans and applies stay local (see docs/auth0-terraform.md).
+      - name: Format
+        run: terraform fmt -check -recursive
+
+      - name: Init
+        run: terraform init -backend=false -input=false
+
+      - name: Validate
+        run: terraform validate

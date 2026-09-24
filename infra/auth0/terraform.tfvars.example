@@ -1,0 +1,26 @@
+# Example shape. The real values are in terraform.tfvars.
+
+api_identifier = "https://api.np-api.dev"
+
+spas = {
+  web = {
+    name          = "np-web"
+    callback_urls = ["http://localhost:5173", "https://app.example.com"]
+    logout_urls   = ["http://localhost:5173", "https://app.example.com"]
+    web_origins   = ["http://localhost:5173", "https://app.example.com"]
+  }
+  admin = {
+    name          = "np-admin"
+    callback_urls = ["http://localhost:3000"]
+    logout_urls   = ["http://localhost:3000"]
+    web_origins   = ["http://localhost:3000"]
+  }
+  # Postman as a public PKCE client (no secret). Needed because the API only issues user
+  # tokens to apps with a client grant. Leave Client Secret empty in Postman.
+  postman = {
+    name          = "np-postman"
+    callback_urls = ["https://oauth.pstmn.io/v1/callback"]
+    logout_urls   = []
+    web_origins   = []
+  }
+}
